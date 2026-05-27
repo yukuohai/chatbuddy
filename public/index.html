@@ -1,0 +1,138 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>ChatBuddy</title>
+    <link rel="icon" href="/favicon.ico" sizes="32x32" />
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <section id="auth-view" class="auth-view">
+      <form id="auth-form" class="auth-card">
+        <div class="logo-lockup">
+          <div class="logo-mark" aria-hidden="true"><span>CB</span></div>
+          <div>
+            <p class="eyebrow">ChatBuddy</p>
+            <h1>ChatBuddy</h1>
+          </div>
+        </div>
+        <p class="auth-copy">登录后使用专家模式和模型抗辩，历史对话会按用户独立保存。</p>
+        <label class="field">
+          <span>用户名</span>
+          <input id="auth-username" autocomplete="username" required />
+        </label>
+        <label class="field">
+          <span>密码</span>
+          <input id="auth-password" type="password" autocomplete="current-password" required />
+        </label>
+        <button id="auth-submit" class="primary" type="submit">登录</button>
+        <button id="auth-toggle" class="text-button" type="button">创建新账号</button>
+        <p id="auth-error" class="form-error hidden"></p>
+      </form>
+    </section>
+
+    <main id="app-view" class="app hidden">
+      <aside class="sidebar">
+        <div class="brand">
+          <div class="logo-lockup">
+            <div class="logo-mark" aria-hidden="true"><span>CB</span></div>
+            <div>
+              <p class="eyebrow">ChatBuddy</p>
+              <h1>ChatBuddy</h1>
+            </div>
+          </div>
+        </div>
+
+        <nav class="mode-row" aria-label="回答模式">
+          <button type="button" class="mode-button active" data-mode="expert">专家模式</button>
+          <button type="button" class="mode-button" data-mode="debate">模型抗辩</button>
+        </nav>
+
+        <button id="new-chat" class="secondary" type="button">新建对话</button>
+
+        <section class="history">
+          <div class="section-title">过往对话</div>
+          <div id="history-list" class="history-list"></div>
+        </section>
+      </aside>
+
+      <section class="chat">
+        <header class="chat-header">
+          <div>
+            <p id="mode-kicker" class="eyebrow">专家模式</p>
+            <h2 id="conversation-title">开始新对话</h2>
+          </div>
+          <div class="user-box">
+            <span id="current-user"></span>
+            <button id="logout" class="text-button" type="button">退出</button>
+          </div>
+        </header>
+
+        <section id="messages" class="messages"></section>
+
+        <section id="settings" class="settings-panel">
+          <div class="global-settings">
+            <label class="switch-row">
+              <input id="web-search-enabled" type="checkbox" />
+              <span>联网搜索</span>
+            </label>
+            <p class="setting-hint">开启后会先检索互联网结果，再结合来源摘要回答。</p>
+          </div>
+
+          <div id="expert-settings" class="mode-settings">
+            <label class="switch-row">
+              <input id="expert-enabled" type="checkbox" checked />
+              <span>启用多专家</span>
+            </label>
+            <label class="field compact" id="expert-count-field">
+              <span>专家数</span>
+              <input id="expert-count" type="number" min="2" max="6" value="4" />
+            </label>
+          </div>
+
+          <div id="debate-settings" class="debate-settings hidden">
+            <label class="switch-row">
+              <input id="debate-enabled" type="checkbox" checked />
+              <span>启用模型抗辩</span>
+            </label>
+            <div id="debate-advanced" class="debate-advanced">
+              <label class="field compact">
+                <span>模型数</span>
+                <select id="model-count">
+                  <option value="2">2 个</option>
+                  <option value="3" selected>3 个</option>
+                  <option value="4">4 个</option>
+                  <option value="5">5 个</option>
+                </select>
+              </label>
+              <label class="field compact">
+                <span>轮数</span>
+                <input id="round-count" type="number" min="1" max="3" value="3" />
+              </label>
+              <div class="model-selectors">
+                <div class="section-title">抗辩模型</div>
+                <div id="model-selectors"></div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <form id="ask-form" class="composer">
+          <textarea
+            id="question"
+            name="question"
+            rows="4"
+            placeholder="输入问题，继续当前对话或开始新的分析"
+            required
+          ></textarea>
+          <button id="submit" class="send-button" type="submit">发送</button>
+          <button id="abort" class="stop-button hidden" type="button">中断</button>
+        </form>
+      </section>
+    </main>
+
+    <script src="/app.js" type="module"></script>
+  </body>
+</html>

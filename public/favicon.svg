@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+  <defs>
+    <linearGradient id="g" x1="12" y1="8" x2="52" y2="56" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#10c76b"/>
+      <stop offset="1" stop-color="#06944e"/>
+    </linearGradient>
+  </defs>
+  <rect x="6" y="6" width="52" height="52" rx="18" fill="url(#g)"/>
+  <ellipse cx="25" cy="26" rx="14" ry="10" fill="#fff" opacity=".28"/>
+  <ellipse cx="39" cy="38" rx="13" ry="9" fill="#fff" opacity=".28"/>
+  <text x="32" y="38" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="17" font-weight="800" fill="#fff">CB</text>
+</svg>
