@@ -139,6 +139,11 @@ button {
   height: 100vh;
   display: grid;
   grid-template-columns: 292px minmax(0, 1fr);
+  transition: grid-template-columns 180ms ease;
+}
+
+.app.sidebar-collapsed {
+  grid-template-columns: 82px minmax(0, 1fr);
 }
 
 .sidebar {
@@ -155,6 +160,44 @@ button {
   display: flex;
   align-items: center;
   justify-content: space-between;
+  gap: 10px;
+}
+
+.sidebar-toggle {
+  min-width: 52px;
+  min-height: 34px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--panel);
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 760;
+}
+
+.sidebar-toggle:hover {
+  color: var(--wechat-dark);
+  border-color: rgba(7, 193, 96, 0.32);
+}
+
+.sidebar-collapsed .sidebar {
+  gap: 12px;
+  padding: 18px 10px;
+}
+
+.sidebar-collapsed .brand {
+  flex-direction: column;
+  align-items: center;
+}
+
+.sidebar-collapsed .brand .logo-lockup > div:last-child,
+.sidebar-collapsed .mode-row,
+.sidebar-collapsed #new-chat,
+.sidebar-collapsed .history {
+  display: none;
+}
+
+.sidebar-collapsed .sidebar-toggle {
+  min-width: 54px;
 }
 
 .mode-row {
@@ -187,7 +230,9 @@ button {
 .primary:focus-visible,
 .send-button:focus-visible,
 .stop-button:focus-visible,
-.copy-button:focus-visible {
+.copy-button:focus-visible,
+.attach-button:focus-visible,
+.sidebar-toggle:focus-visible {
   outline: 2px solid rgba(7, 193, 96, 0.45);
   outline-offset: 2px;
 }
@@ -412,41 +457,47 @@ button {
 
 .settings-panel {
   display: grid;
-  gap: 12px;
-  padding: 14px 24px;
+  grid-template-columns: minmax(170px, 220px) minmax(0, 1fr);
+  gap: 8px 12px;
+  min-height: 74px;
+  max-height: 240px;
+  overflow: auto;
+  resize: vertical;
+  padding: 10px 18px;
   border-top: 1px solid var(--line);
   background: rgba(255, 255, 255, 0.78);
 }
 
 .global-settings {
-  display: flex;
-  align-items: center;
-  gap: 14px;
+  display: grid;
+  gap: 2px;
+  align-content: center;
   min-width: 0;
 }
 
 .setting-hint {
   margin: 0;
   color: var(--muted);
-  font-size: 13px;
+  font-size: 12px;
+  line-height: 1.4;
 }
 
 .mode-settings {
   display: grid;
-  grid-template-columns: 150px 140px;
-  gap: 12px;
+  grid-template-columns: 142px 98px;
+  gap: 10px;
   align-items: end;
 }
 
 .debate-settings {
   display: grid;
-  gap: 12px;
+  gap: 8px;
 }
 
 .debate-advanced {
   display: grid;
-  grid-template-columns: 120px 120px minmax(0, 1fr);
-  gap: 14px;
+  grid-template-columns: 96px 96px minmax(0, 1fr);
+  gap: 10px;
   align-items: start;
 }
 
@@ -456,7 +507,7 @@ button {
 }
 
 .switch-row {
-  min-height: 42px;
+  min-height: 34px;
   display: inline-flex;
   align-items: center;
   gap: 9px;
@@ -478,7 +529,7 @@ button {
 
 #model-selectors {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
   gap: 8px;
 }
 
@@ -515,11 +566,16 @@ select {
 }
 
 textarea {
-  min-height: 86px;
+  min-height: 72px;
   max-height: 220px;
   resize: vertical;
   padding: 13px 14px;
   line-height: 1.65;
+}
+
+.settings-panel input,
+.settings-panel select {
+  min-height: 36px;
 }
 
 input:focus,
@@ -531,15 +587,103 @@ textarea:focus {
 
 .composer {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 96px 96px;
+  grid-template-columns: minmax(0, 1fr) 92px;
   gap: 12px;
-  padding: 14px 24px 20px;
+  min-height: 112px;
+  max-height: 300px;
+  overflow: auto;
+  resize: vertical;
+  padding: 12px 18px 16px;
   background: rgba(255, 255, 255, 0.86);
+}
+
+.composer-main {
+  min-width: 0;
+  display: grid;
+  gap: 8px;
+}
+
+.composer-actions {
+  display: grid;
+  grid-auto-rows: min-content;
+  gap: 8px;
+  align-content: end;
 }
 
 .send-button {
   align-self: end;
   height: 46px;
+}
+
+.attach-button {
+  height: 36px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: var(--panel);
+  color: var(--wechat-dark);
+  font-weight: 760;
+}
+
+.attach-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+.file-input {
+  display: none;
+}
+
+.attachment-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  min-height: 30px;
+}
+
+.attachment-chip,
+.message-attachment {
+  min-width: 0;
+  display: inline-grid;
+  grid-template-columns: minmax(0, auto) auto;
+  align-items: center;
+  gap: 4px 8px;
+  max-width: min(100%, 320px);
+  padding: 6px 8px;
+  border: 1px solid var(--line);
+  border-radius: 13px;
+  background: #f8faf9;
+  color: var(--ink);
+  font-size: 12px;
+}
+
+.attachment-chip span,
+.message-attachment span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 760;
+}
+
+.attachment-chip small,
+.message-attachment small {
+  color: var(--muted);
+}
+
+.attachment-chip button {
+  grid-column: 2;
+  border: 0;
+  background: transparent;
+  color: var(--wechat-dark);
+  font-size: 12px;
+  font-weight: 760;
+}
+
+.message-attachments {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 10px;
 }
 
 .form-error {
@@ -715,6 +859,10 @@ textarea:focus {
     grid-template-columns: 1fr;
   }
 
+  .app.sidebar-collapsed {
+    grid-template-columns: 1fr;
+  }
+
   .sidebar {
     border-right: 0;
     border-bottom: 1px solid var(--line);
@@ -736,14 +884,14 @@ textarea:focus {
   .debate-settings,
   .debate-advanced,
   .mode-settings,
-  .global-settings,
+  .settings-panel,
   .composer {
     grid-template-columns: 1fr;
   }
 
-  .global-settings {
-    align-items: flex-start;
-    flex-direction: column;
+  .composer-actions {
+    grid-template-columns: 92px 1fr 96px;
+    align-items: end;
   }
 
   .bubble {

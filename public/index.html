@@ -43,6 +43,15 @@
               <h1>ChatBuddy</h1>
             </div>
           </div>
+          <button
+            id="sidebar-toggle"
+            class="sidebar-toggle"
+            type="button"
+            aria-expanded="true"
+            title="收起侧边栏"
+          >
+            收起
+          </button>
         </div>
 
         <nav class="mode-row" aria-label="回答模式">
@@ -120,15 +129,23 @@
         </section>
 
         <form id="ask-form" class="composer">
-          <textarea
-            id="question"
-            name="question"
-            rows="4"
-            placeholder="输入问题，继续当前对话或开始新的分析"
-            required
-          ></textarea>
-          <button id="submit" class="send-button" type="submit">发送</button>
-          <button id="abort" class="stop-button hidden" type="button">中断</button>
+          <div class="composer-main">
+            <div id="attachment-list" class="attachment-list hidden" aria-live="polite"></div>
+            <textarea
+              id="question"
+              name="question"
+              rows="3"
+              placeholder="输入问题，继续当前对话或开始新的分析"
+            ></textarea>
+          </div>
+          <div class="composer-actions">
+            <input id="attachments" class="file-input" type="file" multiple />
+            <button id="attach-trigger" class="attach-button" type="button" title="上传附件">
+              附件
+            </button>
+            <button id="submit" class="send-button" type="submit">发送</button>
+            <button id="abort" class="stop-button hidden" type="button">中断</button>
+          </div>
         </form>
       </section>
     </main>

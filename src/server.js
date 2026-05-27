@@ -95,13 +95,16 @@ const server = createServer(async (request, response) => {
     if (request.method === "POST" && url.pathname === "/api/expert") {
       const user = requireUser(request);
       const body = await readJson(request);
+      const attachments = normalizeRequestAttachments(body.attachments);
+      const question = normalizeRequestQuestion(body.question, attachments);
       const signal = createClientAbortSignal(request, response);
       const conversation = body.conversationId
         ? store.getConversation(user.id, body.conversationId)
         : null;
-      const search = await maybeSearchWeb(body.question, body.webSearchEnabled, signal);
+      const search = await maybeSearchWeb(question, body.webSearchEnabled, signal);
       const result = await runExpertMode({
-        question: body.question,
+        question,
+        attachments,
         expertEnabled: body.expertEnabled !== false,
         expertCount: body.expertCount,
         history: conversation?.messages || [],
@@ -115,7 +118,8 @@ const server = createServer(async (request, response) => {
         userId: user.id,
         conversationId: body.conversationId,
         mode: "expert",
-        question: body.question,
+        question,
+        attachments,
         assistantContent: result.final,
         trace: result,
         settings: {
@@ -130,13 +134,16 @@ const server = createServer(async (request, response) => {
     if (request.method === "POST" && url.pathname === "/api/debate") {
       const user = requireUser(request);
       const body = await readJson(request);
+      const attachments = normalizeRequestAttachments(body.attachments);
+      const question = normalizeRequestQuestion(body.question, attachments);
       const signal = createClientAbortSignal(request, response);
       const conversation = body.conversationId
         ? store.getConversation(user.id, body.conversationId)
         : null;
-      const search = await maybeSearchWeb(body.question, body.webSearchEnabled, signal);
+      const search = await maybeSearchWeb(question, body.webSearchEnabled, signal);
       const result = await runDebateMode({
-        question: body.question,
+        question,
+        attachments,
         debateEnabled: body.debateEnabled !== false,
         participantModels: body.participantModels || config.debateModelIds,
         rounds: body.rounds,
@@ -151,7 +158,8 @@ const server = createServer(async (request, response) => {
         userId: user.id,
         conversationId: body.conversationId,
         mode: "debate",
-        question: body.question,
+        question,
+        attachments,
         assistantContent: result.final,
         trace: result,
         settings: {
@@ -218,7 +226,7 @@ async function readJson(request) {
   let raw = "";
   for await (const chunk of request) {
     raw += chunk;
-    if (raw.length > 150000) {
+    if (raw.length > 2_000_000) {
       throw new Error("Request body too large.");
     }
   }
@@ -227,6 +235,29 @@ async function readJson(request) {
   } catch {
     throw new Error("Invalid JSON request body.");
   }
+}
+
+function normalizeRequestQuestion(question, attachments = []) {
+  const text = String(question || "").trim();
+  if (text) return text;
+  return attachments.length ? "请分析我上传的附件。" : "";
+}
+
+function normalizeRequestAttachments(attachments) {
+  if (!Array.isArray(attachments)) return [];
+  return attachments.slice(0, 5).map((item) => ({
+    name: cleanAttachmentText(item?.name, "未命名附件", 180),
+    type: cleanAttachmentText(item?.type, "application/octet-stream", 120),
+    size: Number.isFinite(Number(item?.size)) ? Number(item.size) : 0,
+    kind: ["text", "binary", "oversize"].includes(item?.kind) ? item.kind : "binary",
+    content: cleanAttachmentText(item?.content, "", 12000),
+    truncated: item?.truncated === true
+  }));
+}
+
+function cleanAttachmentText(value, fallback, maxLength) {
+  const text = String(value || fallback || "").replace(/\u0000/g, "").trim();
+  return text.slice(0, maxLength);
 }
 
 function getCurrentUser(request) {

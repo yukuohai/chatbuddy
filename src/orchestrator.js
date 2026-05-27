@@ -26,6 +26,7 @@ export function normalizeQuestion(question) {
 
 export async function runExpertMode({
   question,
+  attachments = [],
   expertEnabled = true,
   expertCount = DEFAULT_EXPERT_COUNT,
   history = [],
@@ -36,8 +37,9 @@ export async function runExpertMode({
   models
 }) {
   const normalized = normalizeQuestion(question);
+  const questionWithAttachments = withAttachmentContext(normalized, attachments);
   const modelQuestion = withSearchContext(
-    withHistoryContext(normalized, history),
+    withHistoryContext(questionWithAttachments, history),
     webSearchResults,
     webSearchError
   );
@@ -112,6 +114,7 @@ export async function runExpertMode({
 
 export async function runDebateMode({
   question,
+  attachments = [],
   debateEnabled = true,
   participantModels = DEFAULT_DEBATE_MODEL_IDS,
   rounds = DEFAULT_DEBATE_ROUNDS,
@@ -123,8 +126,9 @@ export async function runDebateMode({
   models
 }) {
   const normalized = normalizeQuestion(question);
+  const questionWithAttachments = withAttachmentContext(normalized, attachments);
   const modelQuestion = withSearchContext(
-    withHistoryContext(normalized, history),
+    withHistoryContext(questionWithAttachments, history),
     webSearchResults,
     webSearchError
   );
@@ -299,7 +303,12 @@ function withHistoryContext(question, history) {
   const context = usableHistory
     .map((message) => {
       const speaker = message.role === "user" ? "用户" : "助手";
-      return `${speaker}：\n${String(message.content || "").slice(0, 3000)}`;
+      const attachmentContext =
+        message.role === "user" ? formatAttachmentContext(message.attachments, 1000) : "";
+      const content = [String(message.content || "").slice(0, 3000), attachmentContext]
+        .filter(Boolean)
+        .join("\n\n");
+      return `${speaker}：\n${content}`;
     })
     .join("\n\n---\n\n");
 
@@ -326,6 +335,32 @@ function withSearchContext(question, results, error) {
 以下是本轮联网搜索结果。请只把它作为补充证据使用，优先判断来源可靠性；涉及最新事实时请引用对应编号或链接，不能从搜索摘要推出的内容要明确标注不确定。
 
 ${searchText}`;
+}
+
+function withAttachmentContext(question, attachments) {
+  const attachmentContext = formatAttachmentContext(attachments, 2800);
+  if (!attachmentContext) return question;
+  return `${question}
+
+本轮用户上传的附件内容如下。附件内容可能被截取；请把它作为用户提供的一手材料使用，并在引用时标明文件名。
+
+${attachmentContext}`;
+}
+
+function formatAttachmentContext(attachments, maxCharsPerAttachment) {
+  const items = ensureArray(attachments).slice(0, 5);
+  if (!items.length) return "";
+
+  return items
+    .map((item, index) => {
+      const name = cleanText(item.name, `附件 ${index + 1}`).slice(0, 180);
+      const type = cleanText(item.type, "application/octet-stream").slice(0, 120);
+      const size = Number.isFinite(Number(item.size)) ? Number(item.size) : 0;
+      const content = cleanText(item.content, "未提供可读正文").slice(0, maxCharsPerAttachment);
+      const suffix = item.truncated ? "\n[附件内容已截取]" : "";
+      return `附件 ${index + 1}: ${name}\n类型: ${type}\n大小: ${size} bytes\n内容:\n${content}${suffix}`;
+    })
+    .join("\n\n---\n\n");
 }
 
 function collectUsage(entries) {

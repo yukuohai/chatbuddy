@@ -8,8 +8,15 @@ const state = {
   modelOptions: [],
   defaultModelIds: [],
   visibleMessages: [],
+  attachments: [],
+  sidebarCollapsed: false,
   abortController: null
 };
+
+const SIDEBAR_STORAGE_KEY = "chatbuddy.sidebarCollapsed";
+const MAX_ATTACHMENTS = 5;
+const MAX_ATTACHMENT_BYTES = 800 * 1024;
+const MAX_ATTACHMENT_CHARS = 12000;
 
 const authView = document.querySelector("#auth-view");
 const appView = document.querySelector("#app-view");
@@ -39,6 +46,10 @@ const newChat = document.querySelector("#new-chat");
 const logout = document.querySelector("#logout");
 const currentUser = document.querySelector("#current-user");
 const webSearchEnabled = document.querySelector("#web-search-enabled");
+const sidebarToggle = document.querySelector("#sidebar-toggle");
+const attachmentInput = document.querySelector("#attachments");
+const attachTrigger = document.querySelector("#attach-trigger");
+const attachmentList = document.querySelector("#attachment-list");
 
 authForm.addEventListener("submit", async (event) => {
   event.preventDefault();
@@ -77,9 +88,31 @@ modeButtons.forEach((button) => {
 newChat.addEventListener("click", () => {
   state.currentConversation = null;
   conversationTitle.textContent = "开始新对话";
+  conversationTitle.title = "开始新对话";
+  clearAttachments();
   renderMessages();
   renderHistory();
   document.querySelector("#question").focus();
+});
+
+sidebarToggle.addEventListener("click", () => {
+  setSidebarCollapsed(!state.sidebarCollapsed);
+});
+
+attachTrigger.addEventListener("click", () => {
+  attachmentInput.click();
+});
+
+attachmentInput.addEventListener("change", async () => {
+  await addAttachments([...attachmentInput.files]);
+  attachmentInput.value = "";
+});
+
+attachmentList.addEventListener("click", (event) => {
+  const button = event.target.closest("[data-remove-attachment]");
+  if (!button) return;
+  state.attachments = state.attachments.filter((item) => item.id !== button.dataset.removeAttachment);
+  renderAttachmentList();
 });
 
 logout.addEventListener("click", async () => {
@@ -130,12 +163,14 @@ form.addEventListener("submit", async (event) => {
   event.preventDefault();
   if (state.busy) return;
 
-  const question = questionInput.value.trim();
+  const question = questionInput.value.trim() || (state.attachments.length ? "请分析我上传的附件。" : "");
   if (!question) return;
+  const attachments = state.attachments.map(toAttachmentPayload);
 
   questionInput.value = "";
+  clearAttachments();
   setBusy(true);
-  appendPendingUserMessage(question);
+  appendPendingUserMessage(question, attachments);
   state.abortController = new AbortController();
 
   try {
@@ -145,6 +180,7 @@ form.addEventListener("submit", async (event) => {
         ? {
             question,
             conversationId: state.currentConversation?.id,
+            attachments,
             webSearchEnabled: webSearchEnabled.checked,
             expertEnabled: expertEnabled.checked,
             expertCount: Number(document.querySelector("#expert-count").value)
@@ -152,6 +188,7 @@ form.addEventListener("submit", async (event) => {
         : {
             question,
             conversationId: state.currentConversation?.id,
+            attachments,
             webSearchEnabled: webSearchEnabled.checked,
             debateEnabled: debateEnabled.checked,
             rounds: Number(document.querySelector("#round-count").value),
@@ -176,6 +213,8 @@ form.addEventListener("submit", async (event) => {
 });
 
 async function boot() {
+  setSidebarCollapsed(localStorage.getItem(SIDEBAR_STORAGE_KEY) === "true");
+  renderAttachmentList();
   try {
     const [{ user }, models] = await Promise.all([request("/api/me"), request("/api/models")]);
     state.modelOptions = models.options;
@@ -229,7 +268,9 @@ async function loadConversation(id) {
 }
 
 function renderConversation(conversation) {
-  conversationTitle.textContent = conversation?.title || "开始新对话";
+  const title = conversation?.title || "开始新对话";
+  conversationTitle.textContent = title;
+  conversationTitle.title = title;
   renderMessages(conversation?.messages || []);
 }
 
@@ -252,11 +293,13 @@ function renderMessages(items = []) {
     .map((message, index) => {
       const isUser = message.role === "user";
       const trace = !isUser && message.trace ? renderTrace(message.trace) : "";
+      const attachments = isUser ? renderMessageAttachments(message.attachments || []) : "";
       return `
         <article class="message ${isUser ? "from-user" : "from-assistant"}">
           <button class="copy-button" data-copy-index="${index}" type="button">复制</button>
           <div class="bubble">
             ${isUser ? `<p>${escapeHtml(message.content)}</p>` : renderMarkdown(message.content)}
+            ${attachments}
             ${trace}
           </div>
         </article>`;
@@ -273,13 +316,16 @@ function renderHistory() {
 
   historyList.innerHTML = state.conversations
     .map(
-      (conversation) => `
+      (conversation) => {
+        const sidebarTitle = conversation.summaryTitle || conversation.title;
+        return `
       <button class="history-item ${
         conversation.id === state.currentConversation?.id ? "active" : ""
-      }" data-id="${escapeHtml(conversation.id)}" type="button">
-        <span>${escapeHtml(conversation.title)}</span>
+      }" data-id="${escapeHtml(conversation.id)}" title="${escapeHtml(conversation.title)}" type="button">
+        <span>${escapeHtml(sidebarTitle)}</span>
         <small>${formatDate(conversation.updatedAt)}</small>
-      </button>`
+      </button>`;
+      }
     )
     .join("");
 
@@ -457,9 +503,137 @@ function renderSearchTrace(trace) {
     </details>`;
 }
 
-function appendPendingUserMessage(content) {
+function setSidebarCollapsed(collapsed) {
+  state.sidebarCollapsed = collapsed;
+  appView.classList.toggle("sidebar-collapsed", collapsed);
+  sidebarToggle.textContent = collapsed ? "展开" : "收起";
+  sidebarToggle.title = collapsed ? "展开侧边栏" : "收起侧边栏";
+  sidebarToggle.setAttribute("aria-expanded", String(!collapsed));
+  localStorage.setItem(SIDEBAR_STORAGE_KEY, String(collapsed));
+}
+
+async function addAttachments(files) {
+  if (!files.length) return;
+  const available = MAX_ATTACHMENTS - state.attachments.length;
+  const selected = files.slice(0, Math.max(available, 0));
+
+  if (!selected.length) {
+    renderInlineError(`最多支持 ${MAX_ATTACHMENTS} 个附件。`);
+    return;
+  }
+
+  const attachments = await Promise.all(selected.map(readAttachment));
+  state.attachments = [...state.attachments, ...attachments];
+  renderAttachmentList();
+
+  if (files.length > selected.length) {
+    renderInlineError(`已添加前 ${MAX_ATTACHMENTS} 个附件，其余附件未加入。`);
+  }
+}
+
+async function readAttachment(file) {
+  const id = `att_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
+  const base = {
+    id,
+    name: file.name || "未命名附件",
+    type: file.type || "application/octet-stream",
+    size: file.size,
+    kind: isReadableAttachment(file) ? "text" : "binary",
+    content: "",
+    truncated: false
+  };
+
+  if (file.size > MAX_ATTACHMENT_BYTES) {
+    return {
+      ...base,
+      kind: "oversize",
+      content: `附件超过 ${formatFileSize(MAX_ATTACHMENT_BYTES)}，未读取正文。`
+    };
+  }
+
+  if (base.kind !== "text") {
+    return {
+      ...base,
+      content: "当前版本仅将非文本附件作为文件元数据传递。"
+    };
+  }
+
+  const text = await file.text();
+  return {
+    ...base,
+    content: text.slice(0, MAX_ATTACHMENT_CHARS),
+    truncated: text.length > MAX_ATTACHMENT_CHARS
+  };
+}
+
+function renderAttachmentList() {
+  if (!state.attachments.length) {
+    attachmentList.classList.add("hidden");
+    attachmentList.innerHTML = "";
+    return;
+  }
+
+  attachmentList.classList.remove("hidden");
+  attachmentList.innerHTML = state.attachments
+    .map(
+      (item) => `
+      <div class="attachment-chip" title="${escapeHtml(item.name)}">
+        <span>${escapeHtml(item.name)}</span>
+        <small>${escapeHtml(formatAttachmentMeta(item))}</small>
+        <button data-remove-attachment="${escapeHtml(item.id)}" type="button" aria-label="移除附件">移除</button>
+      </div>`
+    )
+    .join("");
+}
+
+function clearAttachments() {
+  state.attachments = [];
+  renderAttachmentList();
+}
+
+function toAttachmentPayload(item) {
+  return {
+    name: item.name,
+    type: item.type,
+    size: item.size,
+    kind: item.kind,
+    content: item.content,
+    truncated: item.truncated
+  };
+}
+
+function renderMessageAttachments(attachments) {
+  if (!attachments.length) return "";
+  return `
+    <div class="message-attachments">
+      ${attachments
+        .map(
+          (item) => `
+          <div class="message-attachment" title="${escapeHtml(item.name)}">
+            <span>${escapeHtml(item.name)}</span>
+            <small>${escapeHtml(formatAttachmentMeta(item))}</small>
+          </div>`
+        )
+        .join("")}
+    </div>`;
+}
+
+function isReadableAttachment(file) {
+  if ((file.type || "").startsWith("text/")) return true;
+  return /\.(txt|md|markdown|csv|tsv|json|jsonl|yaml|yml|xml|html|css|js|jsx|ts|tsx|py|r|sql|sh|log)$/i.test(
+    file.name || ""
+  );
+}
+
+function formatAttachmentMeta(item) {
+  const kindLabel =
+    item.kind === "text" ? "可读文本" : item.kind === "oversize" ? "过大未读取" : "文件元数据";
+  return `${kindLabel} · ${formatFileSize(item.size)}${item.truncated ? " · 已截取" : ""}`;
+}
+
+function appendPendingUserMessage(content, attachments = []) {
   const existing = state.currentConversation?.messages || [];
-  renderMessages([...existing, { role: "user", content }]);
+  renderMessages([...existing, { role: "user", content, attachments }]);
 }
 
 function renderInlineError(message) {
@@ -490,6 +664,7 @@ async function request(url, options = {}) {
 function setBusy(value) {
   state.busy = value;
   submit.disabled = value;
+  attachTrigger.disabled = value;
   abortButton.classList.toggle("hidden", !value);
   submit.textContent = value ? "生成中" : "发送";
 }
@@ -674,6 +849,13 @@ function formatDate(value) {
     hour: "2-digit",
     minute: "2-digit"
   }).format(new Date(value));
+}
+
+function formatFileSize(bytes) {
+  const value = Number(bytes || 0);
+  if (value < 1024) return `${value} B`;
+  if (value < 1024 * 1024) return `${(value / 1024).toFixed(1)} KB`;
+  return `${(value / 1024 / 1024).toFixed(1)} MB`;
 }
 
 async function copyText(text) {

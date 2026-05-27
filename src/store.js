@@ -115,7 +115,16 @@ export function createStore(storePath = process.env.STORE_PATH || defaultStorePa
     return latest ? getConversation(userId, latest.id) : null;
   }
 
-  function appendTurn({ userId, conversationId, mode, question, assistantContent, trace, settings }) {
+  function appendTurn({
+    userId,
+    conversationId,
+    mode,
+    question,
+    assistantContent,
+    trace,
+    settings,
+    attachments = []
+  }) {
     const data = load();
     let conversation = conversationId
       ? data.conversations.find((item) => item.id === conversationId && item.userId === userId)
@@ -127,6 +136,7 @@ export function createStore(storePath = process.env.STORE_PATH || defaultStorePa
         userId,
         mode,
         title: makeTitle(question),
+        summaryTitle: makeSummaryTitle(question),
         createdAt: now(),
         updatedAt: now(),
         settings: settings || {},
@@ -143,6 +153,7 @@ export function createStore(storePath = process.env.STORE_PATH || defaultStorePa
       id: makeId("m"),
       role: "user",
       content: String(question || "").trim(),
+      attachments: normalizeAttachments(attachments),
       createdAt: now()
     });
     conversation.messages.push({
@@ -209,8 +220,53 @@ function makeId(prefix) {
 }
 
 function makeTitle(question) {
-  const title = String(question || "").replace(/\s+/g, " ").trim();
-  return title.length > 34 ? `${title.slice(0, 34)}...` : title || "未命名对话";
+  return String(question || "").replace(/\s+/g, " ").trim() || "未命名对话";
+}
+
+function makeSummaryTitle(question) {
+  let normalized = makeTitle(question)
+    .replace(/[`*_#>\[\](){}]/g, "")
+    .replace(/[，。！？；：、,.!?;:\-/\\|]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+  if (!normalized || normalized === "未命名对话") return "未命名对话";
+
+  normalized = normalized
+    .replace(/^(请|麻烦|帮忙)?(帮我|协助我|给我|为我)?/, "")
+    .replace(/^(我想|我要|我需要|想要)(做一个|做个|创建一个|创建|实现一个|实现|开发一个|开发)?/, "")
+    .replace(/^(如何|怎么|怎样|能否|可以)?/, "")
+    .trim();
+
+  const action = normalized.match(/^(评估|分析|总结|整理|比较|生成|撰写|写|制定|设计|解释|判断|优化)(一下|下)?\s*(.+)$/);
+  if (action) {
+    const topic = action[3]
+      .replace(/^(这个|这份|该|一个|一份|非常长的|详细的|相关的)+/, "")
+      .replace(/\s*(包括|以及|并且|然后|同时).+$/, "")
+      .trim();
+    if (topic.length >= 2) {
+      normalized = `${topic}${action[1]}`;
+    }
+  }
+
+  const words = normalized.split(/\s+/).filter(Boolean);
+  const compact =
+    words.length > 1 && /^[\x00-\x7F\s]+$/.test(normalized)
+      ? words.slice(0, 6).join(" ")
+      : normalized.replace(/\s+/g, "");
+  if (compact.length <= 14) return compact;
+  return `${compact.slice(0, 14)}...`;
+}
+
+function normalizeAttachments(attachments) {
+  if (!Array.isArray(attachments)) return [];
+  return attachments.slice(0, 5).map((item) => ({
+    name: String(item?.name || "未命名附件").slice(0, 180),
+    type: String(item?.type || "application/octet-stream").slice(0, 120),
+    size: Number.isFinite(Number(item?.size)) ? Number(item.size) : 0,
+    kind: ["text", "binary", "oversize"].includes(item?.kind) ? item.kind : "binary",
+    content: String(item?.content || "").slice(0, 12000),
+    truncated: item?.truncated === true
+  }));
 }
 
 function now() {
@@ -230,6 +286,7 @@ function publicConversationSummary(conversation) {
     id: conversation.id,
     mode: conversation.mode,
     title: conversation.title,
+    summaryTitle: conversation.summaryTitle || makeSummaryTitle(conversation.title),
     updatedAt: conversation.updatedAt,
     messageCount: conversation.messages.length
   };

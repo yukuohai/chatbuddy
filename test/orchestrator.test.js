@@ -110,6 +110,40 @@ test("expert mode can bypass multi-expert orchestration", async () => {
   assert.equal(calls.length, 1);
 });
 
+test("expert mode passes uploaded attachment text into model context", async () => {
+  const calls = [];
+  const llm = {
+    async chat(request) {
+      calls.push(request);
+      return {
+        model: request.model,
+        content: "附件答案",
+        usage: { prompt_tokens: 1, completion_tokens: 1, total_tokens: 2 }
+      };
+    }
+  };
+
+  await runExpertMode({
+    question: "请分析附件",
+    attachments: [
+      {
+        name: "notes.md",
+        type: "text/markdown",
+        size: 12,
+        content: "关键事实：A 优于 B",
+        kind: "text"
+      }
+    ],
+    expertEnabled: false,
+    llm,
+    models
+  });
+
+  const userPrompt = calls[0].messages.find((message) => message.role === "user").content;
+  assert.match(userPrompt, /notes\.md/);
+  assert.match(userPrompt, /关键事实：A 优于 B/);
+});
+
 test("debate mode can bypass debate orchestration", async () => {
   const calls = [];
   const llm = {
